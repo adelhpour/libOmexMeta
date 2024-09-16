@@ -1,0 +1,287 @@
+name: BuildLibOmexMeta
+
+# make it get built from every branch
+on:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  build_on_OSs:
+    name: Build LibOmexMeta on ${{ matrix.platform.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: macos-12-release
+            os_type: macos
+            os_name: macos-12
+            build_type: Release
+            build_python: ON
+          - name: macos-12-debug
+            os_type: macos
+            os_name: macos-12
+            build_type: Debug
+            build_python: ON
+          - name: macos-14-release
+            os_type: macos
+            os_name: macos-14
+            build_type: Release
+            build_python: ON
+          - name: macos-14-debug
+            os_type: macos
+            os_name: macos-14
+            build_type: Debug
+            build_python: ON
+          - name: ubuntu-latest-release
+            os_type: ubuntu
+            os_name: ubuntu-latest
+            build_type: Release
+            build_python: ON
+          - name: ubuntu-latest-debug
+            os_type: ubuntu
+            os_name: ubuntu-latest
+            build_type: Debug
+            build_python: ON
+          - name: windows-latest-release
+            os_type: windows
+            os_name: windows-latest
+            expat_lib_name: libexpatmd.lib
+            build_type: Release
+            build_python: ON
+          - name: windows-latest-debug
+            os_type: windows
+            os_name: windows-latest
+            expat_lib_name: libexpatdMD.lib
+            build_type: Debug
+            build_python: OFF
+          - name: manylinux_2_28-release
+            os_type: manylinux
+            os_name: ubuntu-latest
+            container_image: quay.io/pypa/manylinux_2_28_x86_64
+            build_type: Release
+            build_python: ON
+          - name: manylinux_2_28-debug
+            os_type: manylinux
+            os_name: ubuntu-latest
+            container_image: quay.io/pypa/manylinux_2_28_x86_64
+            build_type: Debug
+            build_python: ON
+        python_version: [ "3.12" ]
+        build_tests: [ON]
+
+    runs-on: ${{ matrix.platform.os_name }}
+    container:
+      image: ${{ matrix.platform.container_image || '' }}
+
+    steps:
+      - name: Checkout LibOmexMeta
+        uses: actions/checkout@v4
+
+      - name: Set MSVC as the default compiler on Windows
+        if: matrix.platform.os_type == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Upgrade gcc on Linux
+        if: matrix.platform.os_type == 'manylinux'
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            apt-get update
+            apt-get install -y software-properties-common
+            add-apt-repository -y ppa:ubuntu-toolchain-r/test
+            apt-get update
+            apt-get install -y gcc-11 g++-11
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 90
+            update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 90
+          elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
+            dnf install -y gcc-toolset-11
+            scl enable gcc-toolset-11 bash
+            echo "/opt/rh/gcc-toolset-11/root/usr/bin" >> "${GITHUB_PATH}"
+          fi
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Get Host Architecture
+        shell: bash
+        run: |
+          architecture=$(uname -m)
+          echo "host_architecture=$architecture" >> "${GITHUB_ENV}"
+          if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+            echo "OSX_ARCHITECTURES=$architecture" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Install ccache
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}
+          if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+            brew install ccache
+          elif [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            sudo apt-get update
+            sudo apt-get install -y ccache
+          elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
+            mkdir -p ccache
+            cd ccache
+            curl -L https://github.com/ccache/ccache/releases/download/v4.9.1/ccache-4.9.1.tar.gz > ccache.tar.gz
+            tar -zxf ccache.tar.gz
+            rm ccache.tar.gz
+            mkdir -p build-ccache
+            mkdir -p install-ccache
+            cd build-ccache
+            cmake -DCMAKE_INSTALL_PREFIX="$RUNNER_WORKSPACE/ccache/install-ccache" -DCMAKE_BUILD_TYPE=Release ../ccache-4.9.1
+            cmake --build . --target install
+            echo "$RUNNER_WORKSPACE/ccache/install-ccache/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Prepare ccache timestamp on non-Windows platforms
+        if: matrix.platform.os_type != 'windows'
+        id: ccache_cache_timestamp
+        shell: cmake -P {0}
+        run: |
+          string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
+          message("timestamp=${current_date}" >> $GITHUB_OUTPUT)
+
+      - name: Set ccache cache directory on non-Windows
+        if: matrix.platform.os_type != 'windows'
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}
+          echo "CCACHE_DIR=${RUNNER_WORKSPACE}/.ccache" >> "${GITHUB_ENV}"
+          echo "COMPILER_LAUNCHER=ccache" >> "${GITHUB_ENV}"
+
+      - name: Cache ccache files on non-Windows
+        if: matrix.platform.os_type != 'windows'
+        uses: actions/cache@v4
+        with:
+          path: ${RUNNER_WORKSPACE}/.ccache
+          key:
+            ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp
+            }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+            ${{ runner.os }}-
+
+      - name: Setup Python for non-Manylinux platforms
+        if: matrix.platform.build_python == 'ON' && matrix.platform.os_type != 'manylinux'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Setup Python for Manylinux platforms
+        if: matrix.platform.build_python == 'ON' && matrix.platform.os_type == 'manylinux'
+        shell: bash
+        run: |
+          dnf install -y wget
+          wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+          bash Miniconda3-latest-Linux-x86_64.sh -b -p /Miniconda3
+
+          /Miniconda3/bin/conda create -y --name py3 python=${{ matrix.python_version }}
+          
+          /Miniconda3/bin/conda init && bash ~/.bashrc && . ~/.bashrc          cd ${RUNNER_WORKSPACE}
+          # sed -i 's/PKG_CONFIG openssl /PKG_CONFIG openssl11 /g' configure
+
+          echo "python_exe=/Miniconda3/envs/py3/bin/python" >> $GITHUB_ENV
+          echo "python_dir=/Miniconda3/envs/py3"  >> $GITHUB_ENV
+
+      - name: Save Python executable for Windows
+        if: matrix.platform.build_python == 'ON' && matrix.platform.os_type == 'windows'
+        run: |
+          cd ${{ env.pythonLocation }}
+          $pattern = '[\\]'
+
+          $pythonWinExecutable = "${{env.pythonLocation }}" -replace $pattern, '/'
+          echo "python_exe=$pythonWinExecutable/python.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "python_v1_dir=$pythonWinExecutable" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create build directory
+        shell: bash
+        run: mkdir -p ${RUNNER_WORKSPACE}/build-libomexmeta
+
+      - name: Configure CMake for LibOmexMeta
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}/build-libomexmeta
+          cmake $GITHUB_WORKSPACE \
+          -G "Ninja" \
+          -DCMAKE_C_COMPILER_LAUNCHER=${COMPILER_LAUNCHER} \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=${COMPILER_LAUNCHER} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.platform.build_type }} \
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.platform.arch }} \
+          -DCMAKE_INSTALL_PREFIX="${RUNNER_WORKSPACE}/install-libomexmeta" \
+          -DWITH_PYTHON=${{ matrix.platform.build_python }}
+
+      - name: Build and install LibOmexMeta
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}/build-libomexmeta
+          cmake --build . --target install --config ${{ matrix.platform.build_type }}
+
+      - name: Run LibOmexMeta tests
+        if : matrix.platform.build_type == 'Release'
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}/build-libomexmeta
+          ctest -C ${{ matrix.platform.build_type }} --output-on-failure --verbose --extra-verbose --progress
+
+      - name: Set artifacts path and name
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}
+          echo "artifacts_name=libomexmeta-${{ matrix.platform.name }}" >> "${GITHUB_ENV}"
+          # we need to use relative path as actions/upload-artifact@v1 cannot find it on containerized runners
+          echo "artifacts_path=${RUNNER_WORKSPACE}/install-libomexmeta" >> "${GITHUB_ENV}"
+
+      - name: Upload LibOmexMeta binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{env.artifacts_name}}
+          path: ${{env.artifacts_path}}
+
+      - name: Create Python wheel artifacts
+        if: matrix.platform.build_type == 'Release' && matrix.platform.build_python == 'ON'
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}/install-libomexmeta/bindings/python
+          if [ "${{ matrix.platform.os_type }}" == 'windows' ]; then
+            ${{env.python_exe}} -m pip install setuptools wheel
+            ${{env.python_exe}} setup.py bdist_wheel
+          elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
+            python${{ matrix.python_version }} -m pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org setuptools wheel
+            python${{ matrix.python_version }} setup.py bdist_wheel
+          else
+            python${{ matrix.python_version }} -m pip install setuptools wheel
+            python${{ matrix.python_version }} setup.py bdist_wheel
+          fi
+
+      - name: Rename Python wheel artifacts
+        if: matrix.platform.build_type == 'Release' && matrix.platform.build_python == 'ON'
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}/install-libomexmeta/bindings/python/dist
+          if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+            mv libomexmeta*.whl $(echo libomexmeta*.whl | sed "s/universal2/${host_architecture}/g")
+          elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
+            mv libomexmeta*.whl $(echo libomexmeta*.whl | sed "s/linux/manylinux_2_28/g")
+          elif [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            mv libomexmeta*.whl $(echo libomexmeta*.whl | sed "s/linux/ubuntu/g")
+          fi
+          python_version_number=$(echo "${{ matrix.python_version }}" | tr -d '.')
+          mv libomexmeta*.whl $(echo libomexmeta*.whl | sed "s/cp${python_version_number}-cp${python_version_number}/py3-none/g")
+
+      - name: Set Python wheel artifacts path and name
+        if: matrix.platform.build_type == 'Release' && matrix.platform.build_python == 'ON'
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}
+          python_wheel_file_name=$(ls install-libomexmeta/bindings/python/dist | grep '^libomexmeta')
+          echo "python_wheel_artifacts_name=${python_wheel_file_name}" >> "${GITHUB_ENV}"
+          echo "python_wheel_artifacts_file=${RUNNER_WORKSPACE}/install-libomexmeta/bindings/python/dist/$python_wheel_file_name" >> "${GITHUB_ENV}"
+
+      - name: Upload Python wheel artifacts
+        if: matrix.platform.build_type == 'Release' && matrix.platform.build_python == 'ON'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{env.python_wheel_artifacts_name}}
+          path: ${{env.python_wheel_artifacts_file}}
