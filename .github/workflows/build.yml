@@ -168,12 +168,12 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          if [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
-            apt-get update
-            apt-get install -y gcc-10 g++-10 graphviz liblzma-dev libncurses5
-            apt install doxygen
-          elif [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+          if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
             brew install graphviz coreutils
+          elif [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            sudo apt-get update
+            sudo apt-get install -y gcc-10 g++-10 graphviz liblzma-dev libncurses5
+            sudo apt-get install doxygen
           fi
 
       - name: Install vcpkg dependencies
