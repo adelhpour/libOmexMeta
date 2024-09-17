@@ -180,6 +180,7 @@ jobs:
         id: vcpkg
         with:
           pkgs: curl pcre openssl yajl sqlite3 liblzma
+          triplet: x64-linux
           token: ${{ github.token }}
           github-binarycache: true
 
