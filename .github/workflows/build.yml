@@ -69,8 +69,8 @@ jobs:
             build_python: ON
         python_version: [ "3.12" ]
         build_tests: [ON]
-        build_docs: [ON]
-        build_docs_executable: [ON]
+        build_docs: [OFF]
+        build_docs_executable: [OFF]
 
     runs-on: ${{ matrix.platform.os_name }}
     container:
@@ -165,16 +165,23 @@ jobs:
             ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
             ${{ runner.os }}-
 
-      - name: Install vcpkg and dependencies
+      - name: Install vcpkg dependencies
         shell: bash
         run: |
           cd ${RUNNER_WORKSPACE}
           mkdir -p vcpkg
           git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
           cd ${RUNNER_WORKSPACE}/vcpkg
-          ./bootstrap-vcpkg.sh
-          vcpkg integrate install
-          vcpkg install curl pcre openssl yajl sqlite3 liblzma
+          if [ "${{ matrix.platform.os_type }}" == ubuntu ]; then
+            ./bootstrap-vcpkg.sh
+            vcpkg integrate install
+            vcpkg install curl pcre openssl yajl sqlite3 liblzma
+          elif [ "${{ matrix.platform.os_type }}" == macos ]; then
+            brew install graphviz coreutils
+            ./bootstrap-vcpkg.sh
+            ./vcpkg integrate install
+            ./vcpkg install curl pcre openssl yajl sqlite3 liblzma
+          fi
           echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
 
       - name: Setup Python for non-Manylinux platforms
