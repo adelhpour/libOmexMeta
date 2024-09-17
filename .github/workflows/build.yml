@@ -175,15 +175,13 @@ jobs:
             sudo apt-get install -y gcc-10 g++-10 graphviz liblzma-dev libncurses5
             sudo apt-get install doxygen
           fi
-
       - name: vcpkg build
-        uses: johnwason/vcpkg-action@v5
+        uses: johnwason/vcpkg-action@v6
         id: vcpkg
         with:
           pkgs: curl pcre openssl yajl sqlite3 liblzma
-          cache-key:
-            ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp
-            }}
+          token: ${{ github.token }}
+          github-binarycache: true
 
       - name: Setup Python for non-Manylinux platforms
         if: matrix.platform.build_python == 'ON' && matrix.platform.os_type != 'manylinux'
