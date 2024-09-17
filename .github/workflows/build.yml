@@ -121,8 +121,8 @@ jobs:
           if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
             brew install ccache
           elif [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
-            apt-get update
-            apt-get install -y ccache
+            sudo apt-get update
+            sudo apt-get install -y ccache
           elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
             mkdir -p ccache
             cd ccache
