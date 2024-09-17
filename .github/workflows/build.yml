@@ -18,55 +18,65 @@ jobs:
             os_name: macos-12
             build_type: Release
             build_python: ON
+            vcpkg_triplet: x64-osx
           - name: macos-12-debug
             os_type: macos
             os_name: macos-12
             build_type: Debug
             build_python: ON
+            vcpkg_triplet: x64-osx
           - name: macos-14-release
             os_type: macos
             os_name: macos-14
             build_type: Release
             build_python: ON
+            vcpkg_triplet: arm64-osx
           - name: macos-14-debug
             os_type: macos
             os_name: macos-14
             build_type: Debug
             build_python: ON
+            vcpkg_triplet: arm64-osx
           - name: ubuntu-latest-release
             os_type: ubuntu
             os_name: ubuntu-latest
             build_type: Release
             build_python: ON
+            vcpkg_triplet: x64-linux
           - name: ubuntu-latest-debug
             os_type: ubuntu
             os_name: ubuntu-latest
             build_type: Debug
             build_python: ON
+            vcpkg_triplet: x64-linux
           - name: windows-latest-release
             os_type: windows
             os_name: windows-latest
             expat_lib_name: libexpatmd.lib
             build_type: Release
             build_python: ON
+            vcpkg_triplet: x64-windows
           - name: windows-latest-debug
             os_type: windows
             os_name: windows-latest
             expat_lib_name: libexpatdMD.lib
             build_type: Debug
             build_python: OFF
+            vcpkg_triplet: x64-windows
           - name: manylinux_2_28-release
             os_type: manylinux
             os_name: ubuntu-latest
             container_image: quay.io/pypa/manylinux_2_28_x86_64
             build_type: Release
             build_python: ON
+            vcpkg_triplet: x64-linux
           - name: manylinux_2_28-debug
             os_type: manylinux
             os_name: ubuntu-latest
             container_image: quay.io/pypa/manylinux_2_28_x86_64
             build_type: Debug
             build_python: ON
+            vcpkg_triplet: x64-linux
         python_version: [ "3.12" ]
         build_tests: [ON]
         build_docs: [OFF]
@@ -180,7 +190,7 @@ jobs:
         id: vcpkg
         with:
           pkgs: curl pcre openssl yajl sqlite3 liblzma
-          triplet: x64-linux
+          triplet: ${{ matrix.platform.vcpkg_triplet }}
           token: ${{ github.token }}
           github-binarycache: true
 
