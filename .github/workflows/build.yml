@@ -179,10 +179,10 @@ jobs:
       - name: Install vcpkg dependencies
         shell: bash
         run: |
-          cd ${RUNNER_WORKSPACE}
-          mkdir -p vcpkg
-          git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
-          cd ${RUNNER_WORKSPACE}/vcpkg
+          echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
+          mkdir -p ${VCPKG_INSTALL_PREFIX}
+          cd ${VCPKG_INSTALL_PREFIX}
+          git clone https://github.com/microsoft/vcpkg.git ${VCPKG_INSTALL_PREFIX}
           if [ "${{ matrix.platform.os_type }}" == "ubuntu" ]; then
             ./bootstrap-vcpkg.sh
             vcpkg integrate install
@@ -196,8 +196,6 @@ jobs:
             vcpkg integrate install
             vcpkg install curl:x64-windows-static pcre:x64-windows-static openssl:x64-windows-static yajl:x64-windows-static sqlite3:x64-windows-static liblzma:x64-windows-static
           fi
-
-          echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
 
       - name: Setup Python for non-Manylinux platforms
         if: matrix.platform.build_python == 'ON' && matrix.platform.os_type != 'manylinux'
