@@ -181,7 +181,7 @@ jobs:
         run: |
           echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
           mkdir -p ${RUNNER_WORKSPACE}/vcpkg
-          cd ${VCPKG_INSTALL_PREFIX}
+          cd ${RUNNER_WORKSPACE}/vcpkg
           git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
           if [ "${{ matrix.platform.os_type }}" == "ubuntu" ]; then
             ./bootstrap-vcpkg.sh
