@@ -240,6 +240,13 @@ jobs:
         shell: bash
         run: mkdir -p ${RUNNER_WORKSPACE}/build-libomexmeta
 
+      - name: Print vcpkg root
+        run: |
+          echo "${{ github.workspace }}/vcpkg/installed"
+          ls -l "${{ github.workspace }}/vcpkg
+          ls -l "${{ github.workspace }}/vcpkg/installed"
+          ls -l "${{ github.workspace }}/vcpkg/installed/x64-linux"
+
       - name: Configure CMake for LibOmexMeta
         shell: bash
         run: |
