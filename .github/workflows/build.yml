@@ -165,6 +165,17 @@ jobs:
             ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
             ${{ runner.os }}-
 
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            apt-get update
+            apt-get install -y gcc-10 g++-10 graphviz liblzma-dev libncurses5
+            apt install doxygen
+          elif [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+            brew install graphviz coreutils
+          fi
+
       - name: Install vcpkg dependencies
         shell: bash
         run: |
@@ -172,16 +183,20 @@ jobs:
           mkdir -p vcpkg
           git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
           cd ${RUNNER_WORKSPACE}/vcpkg
-          if [ "${{ matrix.platform.os_type }}" == ubuntu ]; then
+          if [ "${{ matrix.platform.os_type }}" == "ubuntu" ]; then
             ./bootstrap-vcpkg.sh
             vcpkg integrate install
             vcpkg install curl pcre openssl yajl sqlite3 liblzma
-          elif [ "${{ matrix.platform.os_type }}" == macos ]; then
-            brew install graphviz coreutils
+          elif [ "${{ matrix.platform.os_type }}" == "macos" ]; then
             ./bootstrap-vcpkg.sh
             ./vcpkg integrate install
             ./vcpkg install curl pcre openssl yajl sqlite3 liblzma
+          elif [ "${{ matrix.platform.os_type }}" == "windows" ]; then
+            ./bootstrap-vcpkg.sh
+            vcpkg integrate install
+            vcpkg install curl:x64-windows-static pcre:x64-windows-static openssl:x64-windows-static yajl:x64-windows-static sqlite3:x64-windows-static liblzma:x64-windows-static
           fi
+
           echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
 
       - name: Setup Python for non-Manylinux platforms
