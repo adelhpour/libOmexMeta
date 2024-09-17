@@ -69,6 +69,8 @@ jobs:
             build_python: ON
         python_version: [ "3.12" ]
         build_tests: [ON]
+        build_docs: [ON]
+        build_docs_executable: [ON]
 
     runs-on: ${{ matrix.platform.os_name }}
     container:
@@ -163,6 +165,18 @@ jobs:
             ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
             ${{ runner.os }}-
 
+      - name: Install vcpkg and dependencies
+        shell: bash
+        run: |
+          cd ${RUNNER_WORKSPACE}
+          mkdir -p vcpkg
+          git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
+          cd ${RUNNER_WORKSPACE}/vcpkg
+          ./bootstrap-vcpkg.sh
+          vcpkg integrate install
+          vcpkg install curl pcre openssl yajl sqlite3 liblzma
+          echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
+
       - name: Setup Python for non-Manylinux platforms
         if: matrix.platform.build_python == 'ON' && matrix.platform.os_type != 'manylinux'
         uses: actions/setup-python@v5
@@ -176,12 +190,10 @@ jobs:
           dnf install -y wget
           wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
           bash Miniconda3-latest-Linux-x86_64.sh -b -p /Miniconda3
-
           /Miniconda3/bin/conda create -y --name py3 python=${{ matrix.python_version }}
-          
-          /Miniconda3/bin/conda init && bash ~/.bashrc && . ~/.bashrc          cd ${RUNNER_WORKSPACE}
+          /Miniconda3/bin/conda init && bash ~/.bashrc && . ~/.bashrc
+          cd ${RUNNER_WORKSPACE}
           # sed -i 's/PKG_CONFIG openssl /PKG_CONFIG openssl11 /g' configure
-
           echo "python_exe=/Miniconda3/envs/py3/bin/python" >> $GITHUB_ENV
           echo "python_dir=/Miniconda3/envs/py3"  >> $GITHUB_ENV
 
@@ -194,6 +206,18 @@ jobs:
           $pythonWinExecutable = "${{env.pythonLocation }}" -replace $pattern, '/'
           echo "python_exe=$pythonWinExecutable/python.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "python_v1_dir=$pythonWinExecutable" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install Doxygen
+        if: matrix.build_docs == 'ON'
+        run: |
+          if [ "${{ matrix.platform.os_type }}" == 'macos' ]; then
+            brew install doxygen
+          elif [ "${{ matrix.platform.os_type }}" == 'ubuntu' ]; then
+            sudo apt-get update
+            sudo apt-get install -y doxygen
+          elif [ "${{ matrix.platform.os_type }}" == 'manylinux' ]; then
+            dnf install -y doxygen
+          fi  
 
       - name: Create build directory
         shell: bash
@@ -210,6 +234,10 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.platform.build_type }} \
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.platform.arch }} \
           -DCMAKE_INSTALL_PREFIX="${RUNNER_WORKSPACE}/install-libomexmeta" \
+          -DVCPKG_ROOT="${VCPKG_INSTALL_PREFIX}" \
+          -DBUILD_TESTS=${{ matrix.build_tests }} \
+          -DBUILD_DOCS=${{ matrix.build_docs }} \
+          -DBUILD_DOCS_EXECUTABLE=${{ matrix.build_docs_executable }} \
           -DWITH_PYTHON=${{ matrix.platform.build_python }}
 
       - name: Build and install LibOmexMeta
