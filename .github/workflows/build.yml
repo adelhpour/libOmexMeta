@@ -176,27 +176,14 @@ jobs:
             sudo apt-get install doxygen
           fi
 
-      - name: Install vcpkg dependencies
-        shell: bash
-        run: |
-          mkdir -p ${RUNNER_WORKSPACE}/vcpkg
-          cd ${RUNNER_WORKSPACE}/vcpkg
-          git clone https://github.com/microsoft/vcpkg.git ${RUNNER_WORKSPACE}/vcpkg
-          if [ "${{ matrix.platform.os_type }}" == "ubuntu" ]; then
-            ./bootstrap-vcpkg.sh
-            vcpkg integrate install
-            vcpkg install curl pcre openssl yajl sqlite3 liblzma
-          elif [ "${{ matrix.platform.os_type }}" == "macos" ]; then
-            ./bootstrap-vcpkg.sh
-            ./vcpkg integrate install
-            ./vcpkg install curl pcre openssl yajl sqlite3 liblzma
-          elif [ "${{ matrix.platform.os_type }}" == "windows" ]; then
-            ./bootstrap-vcpkg.sh
-            vcpkg integrate install
-            vcpkg install curl:x64-windows-static pcre:x64-windows-static openssl:x64-windows-static yajl:x64-windows-static sqlite3:x64-windows-static liblzma:x64-windows-static
-          fi
-          echo VCPKG_INSTALL_PREFIX="${RUNNER_WORKSPACE}/vcpkg" >> $GITHUB_ENV
-          echo "vcpkg dir is ${VCPKG_INSTALL_PREFIX}"
+      - name: vcpkg build
+        uses: johnwason/vcpkg-action@v5
+        id: vcpkg
+        with:
+          pkgs: curl pcre openssl yajl sqlite3 liblzma
+          cache-key:
+            ${{ runner.os }}-${{ steps.ccache_cache_timestamp.outputs.timestamp
+            }}
 
       - name: Setup Python for non-Manylinux platforms
         if: matrix.platform.build_python == 'ON' && matrix.platform.os_type != 'manylinux'
